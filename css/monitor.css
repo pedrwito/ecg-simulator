@@ -1,0 +1,173 @@
+/**
+ * monitor.css — Complete styling for the multiparameter monitor simulator.
+ *
+ * Dark theme with neon medical monitor colors:
+ *   Green  (#00FF00) — ECG, heart rate
+ *   Cyan   (#00FFFF) — SpO2 / plethysmograph
+ *   Yellow (#FFFF00) — Respiratory rate
+ *   White  (#FFFFFF) — CO2 / capnography
+ *   Red    (#FF4444) — NIBP / alarms
+ *   Pink   (#FF88CC) — Temperature
+ *
+ * Layout:
+ *   - Landing, join, and config screens are centered flex columns
+ *   - Monitor screen: waveform area (65%) + parameter panel (35%) side by side
+ *   - Professor sidebar (280px fixed width) appears on the right in professor mode
+ *   - Toolbar at the bottom with action buttons
+ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; color: #fff; font-family: Arial, sans-serif; overflow: hidden; height: 100vh; }
+
+/* --- Landing Page --- */
+#landing-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100vh; gap: 16px;
+}
+#landing-screen h1 { color: #00FF00; font-size: 28px; margin-bottom: 8px; }
+#landing-screen p { color: #888; font-size: 14px; margin-bottom: 16px; }
+.landing-btn {
+  width: 320px; padding: 16px 24px; font-size: 16px; font-weight: bold;
+  background: #1a1a2e; color: #fff; border: 2px solid #333355;
+  border-radius: 8px; cursor: pointer; text-align: left;
+}
+.landing-btn:hover { background: #16213e; border-color: #4444aa; }
+.landing-btn .btn-title { font-size: 16px; display: block; }
+.landing-btn .btn-desc { font-size: 12px; color: #888; font-weight: normal; display: block; margin-top: 4px; }
+
+/* --- Join Session Dialog --- */
+#join-dialog {
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  height: 100vh; gap: 12px;
+}
+#join-dialog h2 { color: #00FFFF; font-size: 22px; margin-bottom: 8px; }
+#join-code-input {
+  width: 200px; padding: 12px; font-size: 24px; text-align: center;
+  background: #1a1a2e; color: #fff; border: 2px solid #333355;
+  border-radius: 8px; letter-spacing: 6px; text-transform: uppercase;
+}
+#join-error { color: #FF4444; font-size: 14px; display: none; }
+.dialog-btns { display: flex; gap: 12px; margin-top: 8px; }
+.dialog-btns button {
+  padding: 10px 28px; font-size: 14px; border-radius: 6px; cursor: pointer; border: 1px solid #333355;
+}
+#btn-join-confirm { background: #004400; color: #00FF00; border-color: #00FF00; font-weight: bold; }
+#btn-join-back { background: #1a1a2e; color: #fff; }
+
+/* --- Config Screen (Individual mode) --- */
+#config-screen {
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  height: 100vh; gap: 12px;
+}
+#config-screen h1 { color: #00FF00; font-size: 28px; margin-bottom: 16px; }
+.config-row { display: flex; align-items: center; gap: 10px; width: 420px; }
+.config-row label { flex: 1; text-align: right; font-size: 14px; }
+.config-row select, .config-row input {
+  flex: 1; background: #1a1a2e; color: #fff; border: 1px solid #333355;
+  border-radius: 4px; padding: 6px 10px; font-size: 14px; outline: none;
+}
+.config-row .nibp-group { flex: 1; display: flex; gap: 4px; align-items: center; }
+.config-row .nibp-group input { flex: 1; }
+.config-row .nibp-group span { color: #aaa; }
+#btn-start {
+  margin-top: 20px; padding: 14px 48px; font-size: 18px; font-weight: bold;
+  background: #004400; color: #00FF00; border: 2px solid #00FF00;
+  border-radius: 8px; cursor: pointer;
+}
+#btn-start:hover { background: #006600; }
+#btn-config-back {
+  margin-top: 8px; padding: 8px 24px; font-size: 13px;
+  background: #1a1a2e; color: #aaa; border: 1px solid #333355;
+  border-radius: 6px; cursor: pointer;
+}
+
+/* --- Monitor Screen --- */
+#monitor-screen { display: none; height: 100vh; flex-direction: column; }
+#monitor-top { display: flex; flex: 1; min-height: 0; }
+#waveform-area { flex: 65; display: flex; flex-direction: column; gap: 2px; padding: 4px; min-width: 0; }
+#waveform-area canvas { flex: 1; width: 100%; min-height: 0; }
+#param-panel { flex: 35; display: flex; flex-direction: column; gap: 4px; padding: 8px; overflow-y: auto; }
+
+/* Alarm indicator */
+#alarm-indicator {
+  display: none; text-align: center; font-size: 18px; font-weight: bold;
+  color: #FF0000; background: #330000; border: 2px solid #FF0000;
+  border-radius: 4px; padding: 6px;
+}
+
+/* Session info bar (shown for professor/student) */
+#session-bar {
+  display: none; padding: 4px 12px; background: #0a0a14;
+  border-bottom: 1px solid #333355; font-size: 13px;
+  flex-shrink: 0;
+}
+#session-bar .session-code { color: #00FFFF; font-weight: bold; font-size: 15px; letter-spacing: 2px; }
+#session-bar .session-role { color: #888; margin-left: 12px; }
+#session-bar .session-students { color: #888; margin-left: 12px; }
+
+/* Parameter frame */
+.param-frame {
+  border: 1px solid #333355; border-radius: 6px; background: #0a0a14;
+  padding: 6px 12px; display: flex; flex-direction: column;
+}
+.param-name { font-size: 13px; }
+.param-value { font-size: 40px; font-weight: bold; text-align: right; line-height: 1.1; }
+.param-unit { font-size: 12px; text-align: right; }
+
+/* Toolbar */
+#toolbar {
+  display: flex; gap: 8px; padding: 6px 12px; background: #0a0a14;
+  flex-shrink: 0;
+}
+#toolbar button {
+  flex: 1; padding: 10px; font-size: 14px; background: #1a1a2e; color: #fff;
+  border: 1px solid #333355; border-radius: 4px; cursor: pointer;
+}
+#toolbar button:hover { background: #16213e; }
+#btn-arrest { font-weight: bold; }
+#btn-arrest.active { background: #CC0000; border-color: #FF0000; }
+
+/* --- Professor Sidebar --- */
+#professor-sidebar {
+  display: none; width: 280px; background: #0a0a14; border-left: 2px solid #333355;
+  padding: 12px; overflow-y: auto; flex-shrink: 0;
+}
+#professor-sidebar h3 { color: #00FFFF; font-size: 16px; margin-bottom: 12px; text-align: center; }
+.sidebar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sidebar-row label { flex: 0 0 70px; text-align: right; font-size: 13px; color: #ccc; }
+.sidebar-row input, .sidebar-row select {
+  flex: 1; background: #1a1a2e; color: #fff; border: 1px solid #333355;
+  border-radius: 4px; padding: 5px 8px; font-size: 13px; outline: none;
+}
+.sidebar-row .nibp-group { flex: 1; display: flex; gap: 4px; align-items: center; }
+.sidebar-row .nibp-group input { flex: 1; }
+.sidebar-row .nibp-group span { color: #aaa; font-size: 13px; }
+#btn-apply {
+  width: 100%; padding: 10px; font-size: 14px; font-weight: bold;
+  background: #004400; color: #00FF00; border: 2px solid #00FF00;
+  border-radius: 6px; cursor: pointer; margin-top: 8px;
+}
+#btn-apply:hover { background: #006600; }
+#btn-sidebar-arrest {
+  width: 100%; padding: 10px; font-size: 14px; font-weight: bold;
+  background: #1a1a2e; color: #FF4444; border: 2px solid #FF4444;
+  border-radius: 6px; cursor: pointer; margin-top: 8px;
+}
+#btn-sidebar-arrest.active { background: #CC0000; color: #fff; border-color: #FF0000; }
+#btn-close-session {
+  width: 100%; padding: 8px; font-size: 13px;
+  background: #1a1a2e; color: #aaa; border: 1px solid #333355;
+  border-radius: 6px; cursor: pointer; margin-top: 12px;
+}
+
+/* Session ended overlay */
+#session-ended-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85); z-index: 1000;
+  flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+}
+#session-ended-overlay h2 { color: #FF4444; font-size: 24px; }
+#session-ended-overlay button {
+  padding: 12px 32px; font-size: 16px; background: #1a1a2e; color: #fff;
+  border: 1px solid #333355; border-radius: 6px; cursor: pointer;
+}
