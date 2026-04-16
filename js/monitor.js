@@ -199,38 +199,51 @@ export function frame(timestamp) {
     const ecgIdx = state.ecgSampleIdx % state.ecgFull.length;
     const respIdx = state.respSampleIdx % state.respFull.length;
 
-    // Check if current rhythm has its own waveform even during arrest (e.g. VFib)
+    // During arrest: RESP and CO2 always flatline (patient isn't breathing).
+    // ECG and PPG depend on the rhythm type and defib state.
     const currentRhythmDef = RHYTHMS[state.CFG.rhythm] || {};
-    const arrestFlatline = state.arrestActive && !currentRhythmDef.noPulse;
+    const isArrested = state.arrestActive;
+    // ECG flatline only if arrested AND not a pulseless rhythm (VFib shows its waveform)
+    // AND not during defib sequence (need to show shock artifact + recovery)
+    const ecgFlatline = isArrested && !currentRhythmDef.noPulse && !_defibInProgress;
 
-    if (arrestFlatline) {
-      // Cardiac arrest (non-VFib): flatline all waveforms
+    if (ecgFlatline) {
+      // Standard cardiac arrest: flatline ECG and PPG
       state.ecgBuf[state.ecgWritePos] = 0;
       state.ppgBuf[state.ecgWritePos] = 0;
-      state.respBuf[state.respWritePos] = 0;
-      state.co2Buf[state.respWritePos] = 0;
     } else {
-      // Normal operation: copy from pre-generated signals
+      // Normal or VFib or defib sequence: play ECG and PPG from signals
       const ecgVal = state.ecgFull[ecgIdx];
       state.ecgBuf[state.ecgWritePos] = ecgVal;
       state.ppgBuf[state.ecgWritePos] = state.ppgFull[ecgIdx];
-      state.respBuf[state.respWritePos] = state.respFull[respIdx];
-      state.co2Buf[state.respWritePos] = state.co2Full[respIdx];
 
       // R-peak detection: trigger heartbeat beep on upward threshold crossing
-      state.samplesSinceBeep++;
-      if (state.prevEcg < ECG_THRESH && ecgVal >= ECG_THRESH && state.samplesSinceBeep >= REFRACTORY) {
-        state.samplesSinceBeep = 0;
-        playHeartbeepBeep(state.CFG.spo2);
+      // (skip during defib sequence — the recovery beats shouldn't beep yet)
+      if (!_defibInProgress) {
+        state.samplesSinceBeep++;
+        if (state.prevEcg < ECG_THRESH && ecgVal >= ECG_THRESH && state.samplesSinceBeep >= REFRACTORY) {
+          state.samplesSinceBeep = 0;
+          playHeartbeepBeep(state.CFG.spo2);
+        }
+        state.prevEcg = ecgVal;
       }
-      state.prevEcg = ecgVal;
+    }
+
+    // RESP and CO2: flatline during any arrest state (patient not breathing),
+    // normal playback otherwise
+    if (isArrested) {
+      state.respBuf[state.respWritePos] = 0;
+      state.co2Buf[state.respWritePos] = 0;
+    } else {
+      state.respBuf[state.respWritePos] = state.respFull[respIdx];
+      state.co2Buf[state.respWritePos] = state.co2Full[respIdx];
     }
 
     // Advance circular buffer write positions (wrap around)
     state.ecgWritePos = (state.ecgWritePos + 1) % ECG_LEN;
     state.respWritePos = (state.respWritePos + 1) % RESP_LEN;
     state.ecgSampleIdx++;
-    state.respSampleIdx++;
+    if (!isArrested) state.respSampleIdx++;
   }
 
   // Draw all waveforms using the WAVEFORMS config table
@@ -467,9 +480,10 @@ export function triggerDefibrillation() {
   }
 
   // Phase 3: Recovery — sinus beats emerge with increasing amplitude
-  // Generate a few sinus beats that grow from small to normal
   const recoveryHR = DEFAULTS.hr;
   const beatSamples = Math.round((60 / recoveryHR) * FS);
+  const pulseDelay = Math.round(0.25 * FS); // PPG delay after R-peak (~250ms)
+
   for (let i = 0; i < recoveryLen; i++) {
     const t = (i % beatSamples) / beatSamples;
     const beatProgress = i / recoveryLen; // 0→1 over recovery period
@@ -477,15 +491,28 @@ export function triggerDefibrillation() {
     const r = Math.exp(-((t - 0.30) ** 2) / (2 * 0.015 ** 2));
     const s = -0.18 * Math.exp(-((t - 0.33) ** 2) / (2 * 0.015 ** 2));
     const tWave = 0.25 * Math.exp(-((t - 0.52) ** 2) / (2 * 0.07 ** 2));
-    // Amplitude ramps from ~0.2 to ~0.8 during recovery
     const amp = 0.2 + 0.6 * beatProgress;
     postShockSignal[artifactLen + pauseLen + i] = amp * (r + s + tWave)
                                                   + 0.01 * (Math.random() - 0.5);
   }
 
-  // Inject the post-shock sequence by replacing the pre-generated ECG
-  // with our custom sequence, then let deactivateArrest restore normal signals
+  // Generate matching PPG: flat during artifact+pause, pulses during recovery
+  const postShockPPG = new Float32Array(totalLen);
+  // PPG pulses appear during recovery, delayed ~250ms from R-peaks
+  for (let i = 0; i < recoveryLen; i++) {
+    const delayedI = i - pulseDelay;
+    if (delayedI < 0) continue;
+    const t = (delayedI % beatSamples) / beatSamples;
+    const beatProgress = i / recoveryLen;
+    const sys = Math.exp(-((t - 0.22) ** 2) / (2 * 0.055 ** 2));
+    const dia = 0.35 * Math.exp(-((t - 0.44) ** 2) / (2 * 0.065 ** 2));
+    const amp = 0.2 + 0.6 * beatProgress;
+    postShockPPG[artifactLen + pauseLen + i] = amp * (sys + dia);
+  }
+
+  // Inject both post-shock sequences
   state.ecgFull = postShockSignal;
+  state.ppgFull = postShockPPG;
   state.ecgSampleIdx = 0;
   // Stop the VFib alarm during the post-shock sequence
   stopAlarm();
