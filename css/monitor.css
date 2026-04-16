@@ -154,6 +154,16 @@ body { background: #000; color: #fff; font-family: Arial, sans-serif; overflow: 
   border-radius: 6px; cursor: pointer; margin-top: 8px;
 }
 #btn-sidebar-arrest.active { background: #CC0000; color: #fff; border-color: #FF0000; }
+#btn-sidebar-defib {
+  width: 100%; padding: 10px; font-size: 14px; font-weight: bold;
+  background: #1a1a2e; color: #FFAA00; border: 2px solid #FFAA00;
+  border-radius: 6px; cursor: pointer; margin-top: 8px;
+}
+#btn-sidebar-defib:hover { background: #443300; }
+#btn-defib {
+  font-weight: bold; color: #FFAA00; border-color: #FFAA00;
+}
+#btn-defib:hover { background: #443300; }
 #btn-close-session {
   width: 100%; padding: 8px; font-size: 13px;
   background: #1a1a2e; color: #aaa; border: 1px solid #333355;

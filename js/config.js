@@ -97,16 +97,28 @@ export const USE_RECORDINGS = true;
 // to the recording (not adjustable). PPG is generated from the recording's
 // pre-computed R-peak positions for beat-to-beat synchronization.
 export const RHYTHMS = {
+  // --- Synthetic rhythms (HR is adjustable) ---
   'Ritmo Sinusal':             { source: 'synthetic' },
-  'Taquicardia':               { source: 'synthetic', hrMin: 140 },
-  'Bradicardia':               { source: 'synthetic', hrMax: 45 },
+  'Taquicardia Sinusal':       { source: 'synthetic', hrMin: 100 },
+  'Bradicardia Sinusal':       { source: 'synthetic', hrMax: 50 },
+
+  // --- Pulseless rhythms (no cardiac output, need defibrillation) ---
+  'Fibrilación Ventricular':   { source: 'recording', dataKey: 'VFIB', noPulse: true },
+
+  // --- Recording-based rhythms (real patient ECGs from PhysioNet) ---
   'Fibrilación Auricular':     {
     source: 'recording', dataKey: 'AFIB',
-    // Synthetic fallback: no P wave + irregular R-R intervals
     syntheticFallback: { noP: true, jitter: true },
   },
+  'Flutter Auricular':         { source: 'recording', dataKey: 'AF' },
+  'Taquicardia Supraventricular': { source: 'recording', dataKey: 'SVT' },
   'Marcapasos':                { source: 'recording', dataKey: 'PACE' },
-  'Taquicardia Supraventricular': { source: 'recording', dataKey: 'SVTAC' },
+  'Bloqueo AV 1°':             { source: 'recording', dataKey: '1AVB' },
+  'Bloqueo AV 3° (Completo)':  { source: 'recording', dataKey: '3AVB' },
+  'BRIHH':                     { source: 'recording', dataKey: 'LBBB' },
+  'BRDHH':                     { source: 'recording', dataKey: 'RBBB' },
+  'Extrasístole Ventricular':  { source: 'recording', dataKey: 'VPB' },
+  'Wolff-Parkinson-White':     { source: 'recording', dataKey: 'WPW' },
 };
 
 /**
@@ -130,9 +142,12 @@ export function clampHRForRhythm(hr, rhythm) {
 // The main loop iterates this table instead of hardcoding 4 drawWaveform() calls.
 // yMaxDynamic: if true, yMax is computed from CFG.etco2 at render time (CO2
 // waveform amplitude depends on the user-configured EtCO2 value).
+// Y-axis ranges: ECG uses -1.3 to 1.3 to fit all normalized recordings ([-1,1])
+// with padding for the defibrillation spike artifact. PPG peaks at ~1.35 with
+// amplitude scaling. Resp and CO2 ranges are unchanged.
 export const WAVEFORMS = [
-  { canvasId: 'canvas-ecg',  bufKey: 'ecgBuf',  wpKey: 'ecgWritePos',  label: 'ECG',   color: '#00FF00', yMin: -0.5, yMax: 1.2 },
-  { canvasId: 'canvas-ppg',  bufKey: 'ppgBuf',  wpKey: 'ecgWritePos',  label: 'Pleth', color: '#00FFFF', yMin: -0.2, yMax: 1.4 },
+  { canvasId: 'canvas-ecg',  bufKey: 'ecgBuf',  wpKey: 'ecgWritePos',  label: 'ECG',   color: '#00FF00', yMin: -1.3, yMax: 1.3 },
+  { canvasId: 'canvas-ppg',  bufKey: 'ppgBuf',  wpKey: 'ecgWritePos',  label: 'Pleth', color: '#00FFFF', yMin: -0.2, yMax: 1.5 },
   { canvasId: 'canvas-resp', bufKey: 'respBuf', wpKey: 'respWritePos', label: 'RESP',  color: '#FFFF00', yMin: -1.5, yMax: 1.5 },
   { canvasId: 'canvas-co2',  bufKey: 'co2Buf',  wpKey: 'respWritePos', label: 'CO2',   color: '#FFFFFF', yMin: -3,   yMaxDynamic: true },
 ];

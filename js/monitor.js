@@ -21,9 +21,9 @@
  */
 
 import state from './state.js';
-import { FS, ECG_LEN, RESP_LEN, ECG_THRESH, REFRACTORY, WAVEFORMS, RHYTHMS, USE_RECORDINGS, clampHRForRhythm } from './config.js';
-import { generateECG, generatePPG, generateResp, generateCO2, loadSignalData, getRecording, generatePPGFromRPeaks } from './signals.js';
-import { ensureAudio, playHeartbeepBeep, startAlarm, stopAlarm } from './audio.js';
+import { FS, ECG_LEN, RESP_LEN, ECG_THRESH, REFRACTORY, WAVEFORMS, RHYTHMS, DEFAULTS, USE_RECORDINGS, clampHRForRhythm } from './config.js';
+import { generateECG, generatePPG, generateVFib, generateResp, generateCO2, loadSignalData, getRecording, generatePPGFromRPeaks } from './signals.js';
+import { ensureAudio, playTone, playHeartbeepBeep, startAlarm, stopAlarm } from './audio.js';
 import { drawWaveform } from './canvas.js';
 
 /**
@@ -67,7 +67,8 @@ export function regenerateSignals(forceAll = false) {
   // ECG + PPG: regenerate if rhythm, HR, or lead changed
   if (rhythmChanged || hrChanged || leadChanged) {
     const rhythmDef = RHYTHMS[state.CFG.rhythm] || {};
-    const wantsRecording = (rhythmDef.source === 'recording') && rhythmDef.dataKey;
+    const source = rhythmDef.source || 'synthetic';
+    const wantsRecording = (source === 'recording') && rhythmDef.dataKey;
     const useRecording = wantsRecording && USE_RECORDINGS;
 
     if (useRecording) {
@@ -97,13 +98,20 @@ export function regenerateSignals(forceAll = false) {
         }
 
         state.ecgFull = ecg;
-        state.ppgFull = generatePPGFromRPeaks(totalSamples, FS, allRPeaks);
 
-        // Compute actual HR from the recording for display
-        if (allRPeaks.length >= 2) {
-          const totalBeats = allRPeaks.length - 1;
-          const totalTime = (allRPeaks[allRPeaks.length - 1] - allRPeaks[0]) / FS;
-          state.CFG.hr = Math.round(60 * totalBeats / totalTime);
+        if (rhythmDef.noPulse) {
+          // Pulseless rhythm (VFib): flat PPG, no cardiac output
+          state.ppgFull = new Float32Array(totalSamples);
+          state.CFG.hr = 0;
+        } else {
+          state.ppgFull = generatePPGFromRPeaks(totalSamples, FS, allRPeaks);
+
+          // Compute actual HR from the recording's R-peaks
+          if (allRPeaks.length >= 2) {
+            const totalBeats = allRPeaks.length - 1;
+            const totalTime = (allRPeaks[allRPeaks.length - 1] - allRPeaks[0]) / FS;
+            state.CFG.hr = Math.round(60 * totalBeats / totalTime);
+          }
         }
       } else {
         state.ecgFull = generateECG(60, FS, state.CFG.hr, state.CFG.rhythm);
@@ -191,8 +199,12 @@ export function frame(timestamp) {
     const ecgIdx = state.ecgSampleIdx % state.ecgFull.length;
     const respIdx = state.respSampleIdx % state.respFull.length;
 
-    if (state.arrestActive) {
-      // Cardiac arrest: flatline all waveforms
+    // Check if current rhythm has its own waveform even during arrest (e.g. VFib)
+    const currentRhythmDef = RHYTHMS[state.CFG.rhythm] || {};
+    const arrestFlatline = state.arrestActive && !currentRhythmDef.noPulse;
+
+    if (arrestFlatline) {
+      // Cardiac arrest (non-VFib): flatline all waveforms
       state.ecgBuf[state.ecgWritePos] = 0;
       state.ppgBuf[state.ecgWritePos] = 0;
       state.respBuf[state.respWritePos] = 0;
@@ -293,6 +305,12 @@ export async function applyParameters(params) {
     regenerateSignals();
     updateDisplays();
   }
+
+  // If the rhythm has no pulse (e.g. VFib), activate arrest-like state
+  // (alarm, defib button, SpO2 decay) but keep the ECG waveform playing
+  if (rhythmDef.noPulse && !state.arrestActive) {
+    activateArrest();
+  }
 }
 
 // =========================================================================
@@ -314,6 +332,10 @@ export function activateArrest() {
   indicator.style.display = 'block';
   state.spo2Decay = state.CFG.spo2;
 
+  // Show defibrillator buttons
+  document.getElementById('btn-defib').style.display = '';
+  document.getElementById('btn-sidebar-defib').style.display = '';
+
   startAlarm();
 
   // SpO2 decays by 1% every 2 seconds during arrest
@@ -334,9 +356,17 @@ export function activateArrest() {
   document.getElementById('val-hr').style.color = '#FF0000';
 }
 
-/** Deactivate cardiac arrest and restore normal operation. */
+/** Deactivate cardiac arrest and restore normal operation.
+ *  If the current rhythm was a pulseless rhythm (VFib), switch back to Sinus. */
 export function deactivateArrest() {
   state.arrestActive = false;
+
+  // If coming out of a pulseless rhythm (e.g. VFib after defib), return to sinus
+  const rhythmDef = RHYTHMS[state.CFG.rhythm] || {};
+  if (rhythmDef.noPulse) {
+    state.CFG.rhythm = 'Ritmo Sinusal';
+    state.CFG.hr = DEFAULTS.hr;
+  }
   const btnToolbar = document.getElementById('btn-arrest');
   const btnSidebar = document.getElementById('btn-sidebar-arrest');
   const indicator = document.getElementById('alarm-indicator');
@@ -359,6 +389,113 @@ export function deactivateArrest() {
 
   // Force-regenerate all signals coming back from arrest flatline
   regenerateSignals(true);
+
+  // Hide defib buttons
+  document.getElementById('btn-defib').style.display = 'none';
+  document.getElementById('btn-sidebar-defib').style.display = 'none';
+}
+
+// =========================================================================
+//  DEFIBRILLATION
+//  When triggered during cardiac arrest:
+//  1. Inject a high-amplitude spike into the ECG buffer (the defib artifact)
+//  2. Play a "shock" sound
+//  3. Pause for ~2.5 seconds (post-shock assessment period)
+//  4. Resume normal rhythm (deactivate arrest)
+// =========================================================================
+
+/** Whether a defibrillation sequence is currently in progress. */
+let _defibInProgress = false;
+
+/**
+ * Trigger defibrillation. Only works during active cardiac arrest.
+ * Injects a defibrillation artifact into the ECG waveform, then after a
+ * brief pause, restores normal rhythm.
+ */
+/**
+ * Trigger defibrillation. Only works during active cardiac arrest.
+ *
+ * Clinical sequence simulated:
+ * 1. Defibrillation artifact — large biphasic spike on ECG (~150ms)
+ *    visible as a sharp vertical deflection that clips the display
+ * 2. Post-shock pause — ~3 seconds of near-flatline with small
+ *    residual oscillations (normal: the heart is stunned)
+ * 3. Rhythm recovery — normal sinus rhythm gradually returns
+ *
+ * The animation loop continues running during the sequence. We temporarily
+ * override the ECG signal source to inject the artifact and post-shock
+ * pause, then hand back to normal playback.
+ */
+export function triggerDefibrillation() {
+  if (!state.arrestActive || _defibInProgress) return;
+  _defibInProgress = true;
+
+  // --- Phase 1: Shock sound + artifact ---
+  ensureAudio();
+  // Low thump + crackle simulating the capacitor discharge
+  playTone(150, 100, 0.6);
+  setTimeout(() => playTone(80, 200, 0.4), 80);
+
+  // Generate a full post-shock ECG sequence:
+  // [artifact ~150ms] [flatline with tiny residual noise ~3s] [sinus beats emerge]
+  const artifactLen = Math.round(0.15 * FS);    // 150ms shock artifact
+  const pauseLen = Math.round(3.0 * FS);         // 3s post-shock pause
+  const recoveryLen = Math.round(2.0 * FS);      // 2s recovery with emerging beats
+  const totalLen = artifactLen + pauseLen + recoveryLen;
+
+  const postShockSignal = new Float32Array(totalLen);
+
+  // Phase 1: Biphasic defibrillation artifact
+  for (let i = 0; i < artifactLen; i++) {
+    const t = i / artifactLen;
+    if (t < 0.25) {
+      postShockSignal[i] = 5.0 * (t / 0.25);               // rapid rise
+    } else if (t < 0.5) {
+      postShockSignal[i] = 5.0 * (1 - 2 * (t - 0.25));     // cross to -5
+    } else {
+      postShockSignal[i] = -5.0 * (1 - (t - 0.5) / 0.5);   // decay to 0
+    }
+  }
+
+  // Phase 2: Post-shock pause (near-flat with small residual oscillations)
+  for (let i = 0; i < pauseLen; i++) {
+    const t = i / pauseLen;
+    // Tiny decaying oscillation — stunned myocardium
+    const decay = Math.exp(-t * 5);
+    postShockSignal[artifactLen + i] = 0.05 * decay * Math.sin(2 * Math.PI * 3 * t)
+                                      + 0.01 * (Math.random() - 0.5);
+  }
+
+  // Phase 3: Recovery — sinus beats emerge with increasing amplitude
+  // Generate a few sinus beats that grow from small to normal
+  const recoveryHR = DEFAULTS.hr;
+  const beatSamples = Math.round((60 / recoveryHR) * FS);
+  for (let i = 0; i < recoveryLen; i++) {
+    const t = (i % beatSamples) / beatSamples;
+    const beatProgress = i / recoveryLen; // 0→1 over recovery period
+    // Simplified PQRST that grows in amplitude
+    const r = Math.exp(-((t - 0.30) ** 2) / (2 * 0.015 ** 2));
+    const s = -0.18 * Math.exp(-((t - 0.33) ** 2) / (2 * 0.015 ** 2));
+    const tWave = 0.25 * Math.exp(-((t - 0.52) ** 2) / (2 * 0.07 ** 2));
+    // Amplitude ramps from ~0.2 to ~0.8 during recovery
+    const amp = 0.2 + 0.6 * beatProgress;
+    postShockSignal[artifactLen + pauseLen + i] = amp * (r + s + tWave)
+                                                  + 0.01 * (Math.random() - 0.5);
+  }
+
+  // Inject the post-shock sequence by replacing the pre-generated ECG
+  // with our custom sequence, then let deactivateArrest restore normal signals
+  state.ecgFull = postShockSignal;
+  state.ecgSampleIdx = 0;
+  // Stop the VFib alarm during the post-shock sequence
+  stopAlarm();
+
+  // After the full sequence plays out (~5s), fully restore normal rhythm
+  const sequenceDuration = (totalLen / FS) * 1000; // ms
+  setTimeout(() => {
+    _defibInProgress = false;
+    deactivateArrest();
+  }, sequenceDuration);
 }
 
 /**
@@ -428,6 +565,8 @@ export async function startMonitor() {
   document.getElementById('btn-sidebar-arrest').textContent = 'Paro Cardíaco';
   document.getElementById('alarm-indicator').style.display = 'none';
   document.getElementById('btn-silence').textContent = 'Silenciar Alarma';
+  document.getElementById('btn-defib').style.display = 'none';
+  document.getElementById('btn-sidebar-defib').style.display = 'none';
 
   // Configure UI visibility based on session mode
   const sessionBar = document.getElementById('session-bar');

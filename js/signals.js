@@ -213,6 +213,61 @@ export function generateECG(duration, fs, hr, rhythm) {
 }
 
 /**
+ * Generate a synthetic ventricular fibrillation (VFib) signal.
+ *
+ * VFib is chaotic, disorganized electrical activity with no identifiable QRS
+ * complexes. Modeled as a sum of sinusoids at typical VFib frequencies
+ * (3-7 Hz) with random phases and slowly varying amplitudes. This produces
+ * the characteristic irregular, undulating waveform that looks like a
+ * "bag of worms."
+ *
+ * The amplitude varies over time to simulate coarse VFib (larger waves,
+ * earlier) transitioning toward fine VFib (smaller waves, later) — which
+ * is what happens clinically as the myocardium runs out of energy.
+ *
+ * @param {number} duration - Signal duration in seconds
+ * @param {number} fs - Sample rate in Hz
+ * @returns {Float32Array} VFib signal samples
+ */
+export function generateVFib(duration, fs) {
+  const N = duration * fs;
+  const signal = new Float32Array(N);
+
+  // 4-6 overlapping sinusoids at typical VFib frequencies (3-7 Hz)
+  const components = [];
+  const numComponents = 4 + Math.floor(Math.random() * 3);
+  for (let c = 0; c < numComponents; c++) {
+    components.push({
+      freq: 3 + Math.random() * 4,       // 3-7 Hz
+      phase: Math.random() * 2 * Math.PI, // random starting phase
+      amp: 0.3 + Math.random() * 0.7,     // random amplitude weight
+    });
+  }
+
+  for (let i = 0; i < N; i++) {
+    const t = i / fs;
+    let v = 0;
+    for (const c of components) {
+      v += c.amp * Math.sin(2 * Math.PI * c.freq * t + c.phase);
+    }
+
+    // Amplitude envelope: starts at ~0.8 (coarse VFib), decays slowly toward
+    // ~0.3 (fine VFib) over the duration, simulating energy depletion
+    const envelope = 0.3 + 0.5 * Math.exp(-t / (duration * 0.8));
+
+    // Normalize by number of components and apply envelope
+    v = (v / numComponents) * envelope;
+
+    // Add high-frequency noise for texture
+    v += 0.05 * (Math.random() - 0.5);
+
+    signal[i] = v;
+  }
+
+  return signal;
+}
+
+/**
  * Generate a synthetic photoplethysmography (PPG / pulse oximeter) signal.
  *
  * Each beat has two Gaussian peaks: a systolic peak (main pulse from heart

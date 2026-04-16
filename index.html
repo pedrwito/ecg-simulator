@@ -49,11 +49,19 @@
   <div class="config-row"><label>Ritmo:</label>
     <select id="cfg-rhythm">
       <option>Ritmo Sinusal</option>
-      <option>Taquicardia</option>
-      <option>Bradicardia</option>
+      <option>Taquicardia Sinusal</option>
+      <option>Bradicardia Sinusal</option>
       <option>Fibrilación Auricular</option>
-      <option>Marcapasos</option>
+      <option>Flutter Auricular</option>
       <option>Taquicardia Supraventricular</option>
+      <option>Marcapasos</option>
+      <option>Bloqueo AV 1°</option>
+      <option>Bloqueo AV 3° (Completo)</option>
+      <option>BRIHH</option>
+      <option>BRDHH</option>
+      <option>Extrasístole Ventricular</option>
+      <option>Fibrilación Ventricular</option>
+      <option>Wolff-Parkinson-White</option>
     </select>
   </div>
   <div class="config-row"><label>Derivación:</label>
@@ -137,11 +145,19 @@
       <div class="sidebar-row"><label>Ritmo:</label>
         <select id="sb-rhythm">
           <option>Ritmo Sinusal</option>
-          <option>Taquicardia</option>
-          <option>Bradicardia</option>
+          <option>Taquicardia Sinusal</option>
+          <option>Bradicardia Sinusal</option>
           <option>Fibrilación Auricular</option>
-          <option>Marcapasos</option>
+          <option>Flutter Auricular</option>
           <option>Taquicardia Supraventricular</option>
+          <option>Marcapasos</option>
+          <option>Bloqueo AV 1°</option>
+          <option>Bloqueo AV 3° (Completo)</option>
+          <option>BRIHH</option>
+          <option>BRDHH</option>
+          <option>Extrasístole Ventricular</option>
+          <option>Fibrilación Ventricular</option>
+          <option>Wolff-Parkinson-White</option>
         </select>
       </div>
       <div class="sidebar-row"><label>FC (bpm):</label><input id="sb-hr" type="number" value="72"></div>
@@ -159,6 +175,7 @@
 
       <button id="btn-apply">Aplicar Cambios</button>
       <button id="btn-sidebar-arrest">Paro Cardíaco</button>
+      <button id="btn-sidebar-defib" style="display:none;">Desfibrilar</button>
       <button id="btn-close-session">Cerrar Sesión</button>
     </div>
   </div>
@@ -166,6 +183,7 @@
     <button id="btn-silence">Silenciar Alarma</button>
     <button id="btn-mute">Mute</button>
     <button id="btn-arrest" style="display:none;">Paro Cardíaco</button>
+    <button id="btn-defib" style="display:none;">Desfibrilar</button>
     <button id="btn-back">Volver</button>
   </div>
 </div>

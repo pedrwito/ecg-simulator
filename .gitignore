@@ -1,4 +1,18 @@
+# Python
 .venv/
 __pycache__/
-.DS_Store
 *.pyc
+
+# OS
+.DS_Store
+
+# External datasets (large, download separately — see scripts/README.md)
+physionet_data/
+physionet_headers/
+cardially-ecg-dataset/
+ConditionNames_SNOMED-CT.csv
+
+# IDE
+.idea/
+.vscode/
+*.swp

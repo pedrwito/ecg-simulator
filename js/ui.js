@@ -18,8 +18,8 @@
 
 import state from './state.js';
 import { DEFAULTS } from './config.js';
-import { startMonitor, stopAndCleanup, activateArrest, deactivateArrest } from './monitor.js';
-import { createSession, joinSession, closeSession, cleanupSession, professorApplyChanges, professorToggleArrest } from './session.js';
+import { startMonitor, stopAndCleanup, activateArrest, deactivateArrest, triggerDefibrillation } from './monitor.js';
+import { createSession, joinSession, closeSession, cleanupSession, professorApplyChanges, professorToggleArrest, professorDefibrillate } from './session.js';
 import { ensureAudio } from './audio.js';
 
 /**
@@ -164,12 +164,14 @@ export function initEventListeners() {
   // --- Monitor toolbar ---
   document.getElementById('btn-back').addEventListener('click', returnFromMonitor);
   document.getElementById('btn-arrest').addEventListener('click', toggleArrest);
+  document.getElementById('btn-defib').addEventListener('click', triggerDefibrillation);
   document.getElementById('btn-mute').addEventListener('click', toggleMute);
   document.getElementById('btn-silence').addEventListener('click', silenceAlarm);
 
   // --- Professor sidebar ---
   document.getElementById('btn-apply').addEventListener('click', professorApplyChanges);
   document.getElementById('btn-sidebar-arrest').addEventListener('click', professorToggleArrest);
+  document.getElementById('btn-sidebar-defib').addEventListener('click', professorDefibrillate);
   document.getElementById('btn-close-session').addEventListener('click', () => {
     if (confirm('¿Cerrar la sesión? Los alumnos serán desconectados.')) {
       stopAndCleanup();

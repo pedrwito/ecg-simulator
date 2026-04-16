@@ -21,7 +21,7 @@
 
 import state from './state.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEFAULTS } from './config.js';
-import { startMonitor, applyParameters, activateArrest, deactivateArrest, stopAndCleanup } from './monitor.js';
+import { startMonitor, applyParameters, activateArrest, deactivateArrest, stopAndCleanup, triggerDefibrillation } from './monitor.js';
 
 /**
  * Initialize the Supabase client. Returns false if credentials are placeholder
@@ -313,4 +313,23 @@ export async function professorToggleArrest() {
       arrest: state.arrestActive,
     }).eq('code', state.sessionCode);
   }
+}
+
+/**
+ * Professor: trigger defibrillation during cardiac arrest.
+ * Runs the local defib animation/sound, then pushes the arrest=false state
+ * to Supabase after the post-shock pause so students see the rhythm return.
+ */
+export async function professorDefibrillate() {
+  triggerDefibrillation();
+
+  // After the 2.5s post-shock pause, the arrest will be deactivated locally.
+  // Push the updated state to Supabase so students also resume rhythm.
+  setTimeout(async () => {
+    if (state.sbClient && state.sessionCode) {
+      await state.sbClient.from('sessions').update({
+        arrest: false,
+      }).eq('code', state.sessionCode);
+    }
+  }, 2600);
 }
