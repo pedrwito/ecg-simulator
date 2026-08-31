@@ -202,21 +202,52 @@ function setupPresence() {
   state.presenceChannel.on('presence', { event: 'sync' }, () => {
     const presenceState = state.presenceChannel.presenceState();
     let count = 0;
+    let vestCount = 0;
     for (const key in presenceState) {
       for (const p of presenceState[key]) {
-        if (p.role === 'student') count++;
+        if (p.role === 'student') {
+          count++;
+          if (p.vest) vestCount++;
+        }
       }
     }
     state.studentCount = count;
     const el = document.getElementById('display-student-count');
-    if (el) el.textContent = 'Alumnos conectados: ' + state.studentCount;
+    if (el) {
+      el.textContent = 'Alumnos conectados: ' + state.studentCount +
+        (vestCount > 0 ? ' (' + vestCount + ' con chaleco)' : '');
+    }
   });
 
   state.presenceChannel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
-      await state.presenceChannel.track({ role: state.sessionMode });
+      await state.presenceChannel.track(presencePayload());
     }
   });
+}
+
+/**
+ * The data this client advertises over Presence.
+ * Vest status rides along here rather than in the `sessions` table because it
+ * is per-student, ephemeral, and must not be something one student can write
+ * on behalf of the whole session. Presence is exactly that: per-connection
+ * state that disappears when the connection does. No schema or RLS change.
+ */
+function presencePayload() {
+  return {
+    role: state.sessionMode,
+    vest: state.vestConnected && state.vestOk,
+  };
+}
+
+/**
+ * Re-advertise this client's vest status. Called by vest.js whenever the vest
+ * state changes. No-op outside an active session, so individual mode and the
+ * landing screen cost nothing.
+ */
+export function publishVestPresence() {
+  if (!state.presenceChannel || state.sessionMode !== 'student') return;
+  state.presenceChannel.track(presencePayload()).catch(() => { /* channel closing */ });
 }
 
 /**

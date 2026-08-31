@@ -16,3 +16,4 @@ ConditionNames_SNOMED-CT.csv
 .idea/
 .vscode/
 *.swp
+.gstack/

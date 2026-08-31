@@ -23,7 +23,7 @@
 import state from './state.js';
 import { FS, ECG_LEN, RESP_LEN, ECG_THRESH, REFRACTORY, WAVEFORMS, RHYTHMS, DEFAULTS, USE_RECORDINGS, clampHRForRhythm } from './config.js';
 import { generateECG, generatePPG, generateVFib, generateResp, generateCO2, loadSignalData, getRecording, generatePPGFromRPeaks } from './signals.js';
-import { ensureAudio, playTone, playHeartbeepBeep, startAlarm, stopAlarm } from './audio.js';
+import { ensureAudio, playTone, playHeartbeepBeep, startAlarm, stopAlarm, startTechnicalAlarm, stopTechnicalAlarm } from './audio.js';
 import { drawWaveform } from './canvas.js';
 
 /**
@@ -169,6 +169,51 @@ export function updateDisplays() {
   document.getElementById('val-temp').textContent = state.CFG.temp.toFixed(1);
 }
 
+// =========================================================================
+//  VEST / LEADS-OFF GATE
+//  When a vest is connected but its electrodes are not seated, the monitor
+//  shows no patient at all: every waveform flat, every number blank.
+//
+//  This is kept strictly separate from arrestActive. A student unplugging
+//  their vest must not look like the patient arresting — no red alarm, no
+//  SpO2 decay, no defibrillator — and must not corrupt the professor's
+//  arrest state when the vest is plugged back in.
+// =========================================================================
+
+/** Tracks whether the leads-off UI is currently applied, so the DOM is only
+ *  touched on transitions rather than every frame. */
+let _leadsOffApplied = false;
+
+/**
+ * True when a vest is being required but isn't reporting seated electrodes.
+ * @returns {boolean}
+ */
+export function isLeadsOff() {
+  return state.vestRequired && !(state.vestConnected && state.vestOk);
+}
+
+/**
+ * Apply or clear the leads-off presentation: banner, blanked numerics that
+ * frame() does not write itself, and the low-priority technical alarm.
+ * @param {boolean} on
+ */
+function applyLeadsOffUI(on) {
+  const banner = document.getElementById('vest-banner');
+  if (banner) banner.style.display = on ? 'block' : 'none';
+
+  if (on) {
+    document.getElementById('val-nibp').textContent = '--/--';
+    document.getElementById('val-map').textContent = '(--) mmHg';
+    document.getElementById('val-temp').textContent = '--';
+    document.getElementById('val-hr').style.color = '#666';
+    startTechnicalAlarm();
+  } else {
+    stopTechnicalAlarm();
+    document.getElementById('val-hr').style.color = state.arrestActive ? '#FF0000' : '#00FF00';
+    updateDisplays();
+  }
+}
+
 /**
  * Main animation loop — called every frame via requestAnimationFrame.
  *
@@ -193,6 +238,15 @@ export function frame(timestamp) {
   const samplesToWrite = Math.floor(state.sampleAccum);
   state.sampleAccum -= samplesToWrite;
 
+  // Vest gate: a connected vest whose electrodes aren't seated (or a board
+  // that stopped reporting) means nothing is attached to the patient.
+  // Loop-invariant, so computed once per frame rather than per sample.
+  const leadsOff = isLeadsOff();
+  if (leadsOff !== _leadsOffApplied) {
+    _leadsOffApplied = leadsOff;
+    applyLeadsOffUI(leadsOff);
+  }
+
   for (let s = 0; s < samplesToWrite; s++) {
     // ECG/PPG and RESP/CO2 use independent read indices so changing
     // rhythm doesn't restart the respiratory waveform
@@ -204,8 +258,10 @@ export function frame(timestamp) {
     const currentRhythmDef = RHYTHMS[state.CFG.rhythm] || {};
     const isArrested = state.arrestActive;
     // ECG flatline only if arrested AND not a pulseless rhythm (VFib shows its waveform)
-    // AND not during defib sequence (need to show shock artifact + recovery)
-    const ecgFlatline = isArrested && !currentRhythmDef.noPulse && !_defibInProgress;
+    // AND not during defib sequence (need to show shock artifact + recovery).
+    // leadsOff overrides everything, including VFib — no electrodes, no trace.
+    const ecgFlatline = leadsOff ||
+      (isArrested && !currentRhythmDef.noPulse && !_defibInProgress);
 
     if (ecgFlatline) {
       // Standard cardiac arrest: flatline ECG and PPG
@@ -231,7 +287,7 @@ export function frame(timestamp) {
 
     // RESP and CO2: flatline during any arrest state (patient not breathing),
     // normal playback otherwise
-    if (isArrested) {
+    if (isArrested || leadsOff) {
       state.respBuf[state.respWritePos] = 0;
       state.co2Buf[state.respWritePos] = 0;
     } else {
@@ -243,7 +299,7 @@ export function frame(timestamp) {
     state.ecgWritePos = (state.ecgWritePos + 1) % ECG_LEN;
     state.respWritePos = (state.respWritePos + 1) % RESP_LEN;
     state.ecgSampleIdx++;
-    if (!isArrested) state.respSampleIdx++;
+    if (!isArrested && !leadsOff) state.respSampleIdx++;
   }
 
   // Draw all waveforms using the WAVEFORMS config table
@@ -256,8 +312,15 @@ export function frame(timestamp) {
     drawWaveform(canvas, buffer, writePos, wf.label, wf.color, wf.yMin, yMax);
   }
 
-  // Update numeric displays (different during arrest)
-  if (state.arrestActive) {
+  // Update numeric displays. Leads-off takes priority over arrest: with no
+  // electrodes the monitor cannot measure anything, so it shows '--' rather
+  // than the '0' that means a measured absence of cardiac activity.
+  if (leadsOff) {
+    document.getElementById('val-hr').textContent = '--';
+    document.getElementById('val-spo2').textContent = '--';
+    document.getElementById('val-rr').textContent = '--';
+    document.getElementById('val-etco2').textContent = '--';
+  } else if (state.arrestActive) {
     document.getElementById('val-rr').textContent = '0';
     document.getElementById('val-etco2').textContent = '0';
     document.getElementById('val-spo2').textContent = Math.round(state.spo2Decay);
@@ -360,6 +423,10 @@ export function activateArrest() {
   state.alarmFlashInterval = setInterval(() => {
     state.alarmFlashOn = !state.alarmFlashOn;
     indicator.style.background = state.alarmFlashOn ? '#660000' : '#330000';
+    // With the electrodes off the monitor is measuring nothing, so leave the
+    // HR reading alone — frame() is showing '--' and must not be overwritten
+    // with the '0' that means a measured absence of cardiac activity.
+    if (isLeadsOff()) return;
     const hrEl = document.getElementById('val-hr');
     hrEl.textContent = '0';
     hrEl.style.color = state.alarmFlashOn ? '#FF0000' : '#330000';
@@ -534,6 +601,11 @@ export function stopAndCleanup() {
   state.running = false;
   if (state.animFrameId) cancelAnimationFrame(state.animFrameId);
   stopAlarm();
+  stopTechnicalAlarm();
+  // Reset so the banner is re-applied correctly on the next startMonitor().
+  // The serial port itself stays open — a student returning to the landing
+  // screen and rejoining should not have to reconnect their vest.
+  _leadsOffApplied = false;
   clearInterval(state.spo2DecayInterval);
   clearInterval(state.alarmFlashInterval);
   clearInterval(state.silenceInterval);
@@ -599,6 +671,13 @@ export async function startMonitor() {
   const sessionBar = document.getElementById('session-bar');
   const sidebar = document.getElementById('professor-sidebar');
   const btnArrest = document.getElementById('btn-arrest');
+
+  // The vest belongs to whoever is wearing it — a student, or someone testing
+  // in individual mode. The professor drives the simulation and must never
+  // have their own display gated on hardware they aren't wearing.
+  const showVest = state.vestSupported && state.sessionMode !== 'professor';
+  document.getElementById('btn-vest').style.display = showVest ? '' : 'none';
+  document.getElementById('vest-status').style.display = showVest ? '' : 'none';
 
   if (state.sessionMode === 'professor') {
     sessionBar.style.display = 'block';

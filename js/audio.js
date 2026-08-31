@@ -5,6 +5,11 @@
  * 1. Heartbeat beep — short tone on each R-peak, pitch varies with SpO2
  *    (higher SpO2 = higher pitch, mimicking real pulse oximeters)
  * 2. Flatline alarm — alternating 800/1000 Hz tones during cardiac arrest
+ * 3. Technical alarm — soft double chirp when the vest electrodes are off.
+ *    Deliberately quieter, lower, and far less frequent than the flatline
+ *    alarm: real monitors separate a HIGH-priority physiological alarm (the
+ *    patient is dying) from a LOW-priority technical one (a lead fell off),
+ *    and a student must be able to tell them apart without looking.
  *
  * Design decisions:
  * - AudioContext is created lazily on first user gesture (ensureAudio) because
@@ -22,6 +27,10 @@ import state from './state.js';
 let alarmOscActive = false;
 let alarmToggle = false;
 let alarmTimeout = null;
+
+// Private technical-alarm state machine (vest electrodes off)
+let techAlarmActive = false;
+let techTimeout = null;
 
 /**
  * Create or resume the Web Audio context. Must be called from a user gesture
@@ -100,4 +109,32 @@ export function startAlarm() {
 export function stopAlarm() {
   alarmOscActive = false;
   if (alarmTimeout) { clearTimeout(alarmTimeout); alarmTimeout = null; }
+}
+
+/** Internal: two soft chirps, then schedules the next pair. */
+function playTechTick() {
+  if (!techAlarmActive) return;
+  if (!state.muted && !state.alarmSilenced) {
+    ensureAudio();
+    playTone(440, 120, 0.12);
+    setTimeout(() => { if (techAlarmActive) playTone(440, 120, 0.12); }, 190);
+  }
+  techTimeout = setTimeout(playTechTick, 4000);
+}
+
+/**
+ * Start the technical alarm (vest electrodes not seated). Low priority:
+ * a quiet double chirp every 4 seconds, versus the flatline alarm's urgent
+ * 800/1000 Hz alternation every 800ms. No-op if already running.
+ */
+export function startTechnicalAlarm() {
+  if (techAlarmActive) return;
+  techAlarmActive = true;
+  playTechTick();
+}
+
+/** Stop the technical alarm immediately and clear any pending chirp. */
+export function stopTechnicalAlarm() {
+  techAlarmActive = false;
+  if (techTimeout) { clearTimeout(techTimeout); techTimeout = null; }
 }

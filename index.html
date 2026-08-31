@@ -102,6 +102,10 @@
       <canvas id="canvas-ppg"></canvas>
       <canvas id="canvas-resp"></canvas>
       <canvas id="canvas-co2"></canvas>
+      <div id="vest-banner">
+        <span class="vest-banner-title">ELECTRODOS DESCONECTADOS</span>
+        <span id="vest-banner-detail"></span>
+      </div>
     </div>
     <div id="param-panel">
       <div id="alarm-indicator">⚠ ALARMA ⚠</div>
@@ -180,6 +184,8 @@
     </div>
   </div>
   <div id="toolbar">
+    <button id="btn-vest">Conectar Chaleco</button>
+    <span id="vest-status" class="vest-status vest-off">Sin chaleco</span>
     <button id="btn-silence">Silenciar Alarma</button>
     <button id="btn-mute">Mute</button>
     <button id="btn-arrest" style="display:none;">Paro Cardíaco</button>

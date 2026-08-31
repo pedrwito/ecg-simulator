@@ -36,6 +36,19 @@ const state = {
   presenceChannel: null,     // Supabase presence channel for student count
   studentCount: 0,           // number of students currently connected
 
+  // --- Vest hardware (Web Serial) ---
+  // Deliberately local: never written to the sessions table. See vest.js.
+  vestSupported: false,      // browser implements Web Serial
+  vestRequired: false,       // gate the monitor on vest state (true once one connects)
+  vestConnected: false,      // port open AND receiving heartbeats
+  vestOk: false,             // firmware reports all required electrodes seated
+  vestMask: 0,               // 10-bit bitmap of which electrodes read correct
+  vestPort: null,            // SerialPort instance
+  vestReader: null,          // active ReadableStreamDefaultReader
+  vestLastLineAt: 0,         // timestamp of last parsed line (watchdog)
+  vestGraceUntil: 0,         // suppress watchdog until this time (DTR reset)
+  vestWatchdog: null,        // setInterval ID for the staleness watchdog
+
   // --- Audio ---
   audioCtx: null,            // Web Audio API AudioContext (created on first user gesture)
 

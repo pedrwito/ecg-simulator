@@ -137,6 +137,33 @@ export function clampHRForRhythm(hr, rhythm) {
   return hr;
 }
 
+// --- Vest hardware (Web Serial) ---
+// The Sinuplexor board reports which vest electrodes are correctly seated.
+// See firmware/Sinuplexor4/Sinuplexor4.ino for the wire protocol.
+
+/** Must match Serial.begin() in the sketch. */
+export const VEST_BAUD = 9600;
+
+/** No line for this long means the board is unplugged, reset, or hung.
+ *  The firmware heartbeats once per second, so 3s is three missed beats. */
+export const VEST_STALE_MS = 3000;
+
+/** Opening a serial port asserts DTR, which resets Uno/Nano-class boards into
+ *  their bootloader for ~2s. Suppress the watchdog until the sketch is back. */
+export const VEST_GRACE_MS = 4000;
+
+/** How often the staleness watchdog checks. */
+export const VEST_WATCHDOG_MS = 500;
+
+/** Electrode names by bit position in the firmware's mask. These are the 10
+ *  electrodes of a standard 12-lead placement: neutral, 6 precordial, and the
+ *  3 limb electrodes. */
+export const VEST_ELECTRODES = ['N', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R', 'L', 'F'];
+
+/** Electrodes excluded from the pass/fail gate. Must match IGNORED_MASK in the
+ *  firmware — bit 1 (C1), whose cable is broken on the current hardware. */
+export const VEST_IGNORED_MASK = (1 << 1);
+
 // --- Waveform display configuration ---
 // Each entry maps a waveform to its canvas, buffer, color, and Y-axis range.
 // The main loop iterates this table instead of hardcoding 4 drawWaveform() calls.

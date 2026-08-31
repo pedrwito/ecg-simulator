@@ -12,13 +12,23 @@
  * available immediately when the user selects a recording-based rhythm. The
  * fetch runs in the background while the user is on the landing/config screen,
  * so there's no visible delay.
+ *
+ * The vest link (vest.js) is initialized here too: it feature-detects Web
+ * Serial and reconnects to a port this origin was already granted, so a
+ * returning student never sees the browser's port picker twice.
  */
 
 import { initEventListeners } from './ui.js';
 import { loadSignalData } from './signals.js';
+import { initVest } from './vest.js';
 import { USE_RECORDINGS } from './config.js';
 
 initEventListeners();
+
+// Feature-detect Web Serial and silently reconnect to an already-authorized
+// vest. On browsers without Web Serial this hides the vest controls and the
+// app behaves exactly as it did before.
+initVest();
 
 // Preload signal recordings in the background (non-blocking).
 // By the time the user navigates to the monitor, the data is cached.
