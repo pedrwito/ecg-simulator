@@ -181,3 +181,62 @@ body { background: #000; color: #fff; font-family: Arial, sans-serif; overflow: 
   padding: 12px 32px; font-size: 16px; background: #1a1a2e; color: #fff;
   border: 1px solid #333355; border-radius: 6px; cursor: pointer;
 }
+
+
+/* ==================== VEST / LEADS-OFF ==================== */
+
+/* Anchor for the leads-off banner overlay. */
+#waveform-area {
+  position: relative;
+}
+
+/* Shown when a vest is connected but its electrodes aren't seated.
+   Deliberately amber, not red: this is a low-priority TECHNICAL alarm
+   (an electrode fell off), not a physiological one (the patient is dying). */
+#vest-banner {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 14px 26px;
+  border: 2px solid #FFA500;
+  border-radius: 4px;
+  background: rgba(40, 26, 0, 0.92);
+  color: #FFA500;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.vest-banner-title {
+  display: block;
+  font-size: 20px;
+}
+
+#vest-banner-detail {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0;
+  color: #FFD79B;
+}
+
+/* Toolbar status pill. */
+.vest-status {
+  display: inline-block;
+  padding: 4px 10px;
+  margin-right: 6px;
+  border-radius: 10px;
+  border: 1px solid currentColor;
+  font-size: 12px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.vest-status.vest-off { color: #777; }
+.vest-status.vest-bad { color: #FFA500; }
+.vest-status.vest-ok  { color: #00FF00; }

@@ -21,6 +21,7 @@ import { DEFAULTS } from './config.js';
 import { startMonitor, stopAndCleanup, activateArrest, deactivateArrest, triggerDefibrillation } from './monitor.js';
 import { createSession, joinSession, closeSession, cleanupSession, professorApplyChanges, professorToggleArrest, professorDefibrillate } from './session.js';
 import { ensureAudio } from './audio.js';
+import { toggleVest } from './vest.js';
 
 /**
  * Show a screen by ID, hiding all others.
@@ -167,6 +168,9 @@ export function initEventListeners() {
   document.getElementById('btn-defib').addEventListener('click', triggerDefibrillation);
   document.getElementById('btn-mute').addEventListener('click', toggleMute);
   document.getElementById('btn-silence').addEventListener('click', silenceAlarm);
+  // Web Serial requires a user gesture before it will show the port picker,
+  // which is exactly why this is a button and not an automatic connection.
+  document.getElementById('btn-vest').addEventListener('click', toggleVest);
 
   // --- Professor sidebar ---
   document.getElementById('btn-apply').addEventListener('click', professorApplyChanges);
