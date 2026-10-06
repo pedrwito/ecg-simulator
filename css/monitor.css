@@ -33,6 +33,8 @@ body { background: #000; color: #fff; font-family: Arial, sans-serif; overflow: 
 }
 .landing-btn:hover { background: #16213e; border-color: #4444aa; }
 .landing-btn .btn-title { font-size: 16px; display: block; }
+#credits-link { margin-top: 12px; font-size: 12px; color: #888; }
+#credits-link:hover { color: #7fd4ff; }
 .landing-btn .btn-desc { font-size: 12px; color: #888; font-weight: normal; display: block; margin-top: 4px; }
 
 /* --- Join Session Dialog --- */
@@ -240,3 +242,94 @@ body { background: #000; color: #fff; font-family: Arial, sans-serif; overflow: 
 .vest-status.vest-off { color: #777; }
 .vest-status.vest-bad { color: #FFA500; }
 .vest-status.vest-ok  { color: #00FF00; }
+
+
+/* ==================== ELECTROCARDIOGRAPH ==================== */
+
+/* Laid out like a clinical cardiograph: settings bar, patient bar, waveforms,
+   toolbar. The canvas paints its own background (black live screen, pink paper
+   in the preview), so the chrome around it stays neutral. */
+#ecg-screen { display: none; height: 100vh; flex-direction: column; background: #0a0a14; }
+
+#ecg-topbar, #ecg-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 8px 12px; background: #1c1f2b; flex-shrink: 0;
+}
+#ecg-topbar { border-bottom: 1px solid #333355; }
+#ecg-toolbar { border-top: 1px solid #333355; }
+.ecg-exam { font-size: 13px; font-weight: bold; color: #ddd; padding-right: 8px; }
+#ecg-topbar label { font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 6px; }
+#ecg-topbar label.ecg-sim { color: #7fd4ff; }
+#ecg-topbar select {
+  background: #0f1118; color: #fff; border: 1px solid #333355;
+  border-radius: 4px; padding: 5px 8px; font-size: 13px; outline: none;
+}
+#ecg-topbar select:disabled { opacity: 0.4; }
+.ecg-spacer { flex: 1; }
+
+#ecg-patient {
+  display: flex; align-items: center; gap: 20px; padding: 5px 12px;
+  background: #101c5a; color: #cfd6ff; font-size: 13px; flex-shrink: 0;
+}
+#ecg-patient b { color: #fff; }
+.ecg-hr { color: #00E000; font-size: 15px; }
+.ecg-hr b { color: #00E000; }
+
+#ecg-note {
+  display: none; padding: 6px 12px; font-size: 13px;
+  color: #FFD79B; background: rgba(40, 26, 0, 0.92); flex-shrink: 0;
+}
+
+#ecg-main { flex: 1; min-height: 0; display: flex; position: relative; }
+#ecg-paper { flex: 1; min-width: 0; height: 100%; display: block; }
+
+#ecg-toolbar button, #ecg-preview-actions button {
+  padding: 9px 18px; font-size: 14px; background: #2a2e3d; color: #fff;
+  border: 1px solid #4a4f66; border-radius: 6px; cursor: pointer;
+}
+#ecg-toolbar button:hover, #ecg-preview-actions button:hover { background: #363b4f; }
+/* The ECG button lights up only when every lead has a usable signal. */
+#btn-ecg-acquire { min-width: 96px; font-weight: bold; color: #888; }
+#btn-ecg-acquire.ready { background: #0b5a2a; border-color: #00E000; color: #fff; }
+#btn-ecg-map.attention { border-color: #FF4444; color: #FF8888; }
+
+/* Preview: the acquired page with its actions down the right-hand side. */
+#ecg-preview-actions {
+  display: none; flex-direction: column; gap: 8px; padding: 10px;
+  background: #1c1f2b; border-left: 1px solid #333355; width: 120px; flex-shrink: 0;
+}
+#ecg-screen.preview #ecg-preview-actions { display: flex; }
+#ecg-screen.preview #btn-ecg-acquire,
+#ecg-screen.preview #btn-ecg-map,
+#ecg-screen.preview #btn-ecg-freeze,
+#ecg-screen.preview #ecg-freeze-nav { display: none; }
+
+/* Freeze: paging controls appear only while the sweep is stopped. */
+#ecg-freeze-nav { display: none; align-items: center; gap: 8px; }
+#ecg-screen.held:not(.preview) #ecg-freeze-nav { display: flex; }
+#ecg-screen.held #btn-ecg-freeze { border-color: #7fd4ff; color: #7fd4ff; }
+#ecg-freeze-pos { font-size: 13px; color: #7fd4ff; min-width: 110px; text-align: center; }
+
+/* Electrode map */
+#ecg-map {
+  display: none; position: absolute; left: 16px; bottom: 16px; width: 250px;
+  padding: 10px; background: rgba(16, 18, 28, 0.96);
+  border: 1px solid #4a4f66; border-radius: 8px; z-index: 5;
+}
+#ecg-map.open { display: block; }
+.ecg-map-title { font-size: 13px; font-weight: bold; color: #ddd; margin-bottom: 4px; }
+#ecg-map-caption { font-size: 12px; color: #aaa; margin-top: 4px; min-height: 30px; }
+#ecg-map-figure svg { width: 100%; height: auto; display: block; }
+
+/* The page is laid out as 266 mm of paper, so printing the canvas at that
+   width puts it on paper at true scale: 25 mm/s and 10 mm/mV measure correctly
+   with a ruler. */
+@media print {
+  @page { size: landscape; margin: 8mm; }
+  body { background: #fff; height: auto; overflow: visible; }
+  #ecg-screen { display: block !important; height: auto; background: #fff; }
+  #ecg-topbar, #ecg-patient, #ecg-note, #ecg-toolbar,
+  #ecg-preview-actions, #ecg-map { display: none !important; }
+  #ecg-main { display: block; }
+  #ecg-paper { width: 266mm; height: auto; }
+}

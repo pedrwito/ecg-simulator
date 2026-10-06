@@ -5,6 +5,7 @@
  * ES modules resolve the full dependency graph automatically:
  *   main.js → ui.js → monitor.js, session.js → signals.js, audio.js, canvas.js
  *                                              → config.js, state.js
+ *                   → ecg.js (electrocardiograph view) → signals.js, vest.js
  *
  * Modules are deferred by default, so the DOM is fully parsed when this runs.
  *

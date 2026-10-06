@@ -717,7 +717,7 @@ export async function startMonitor() {
  * (monitor.js → ui.js → monitor.js). Only handles the monitor-screen case.
  */
 function showMonitorScreen() {
-  ['landing-screen', 'join-dialog', 'config-screen', 'monitor-screen'].forEach(s => {
+  ['landing-screen', 'join-dialog', 'config-screen', 'monitor-screen', 'ecg-screen'].forEach(s => {
     document.getElementById(s).style.display = 'none';
   });
   const el = document.getElementById('monitor-screen');

@@ -91,6 +91,10 @@ export const USE_RECORDINGS = true;
 //   jitter:   boolean — randomize R-R intervals (synthetic only)
 //   hrMin:    number  — minimum HR enforced when this rhythm is selected
 //   hrMax:    number  — maximum HR enforced when this rhythm is selected
+//   ecgKey:   string  — recording used by the electrocardiograph view (ecg.js)
+//             when it differs from dataKey. That view never synthesizes, so the
+//             rhythms the monitor generates need a real recording named here.
+//   ecgOnly:  boolean — offered only in the electrocardiograph view
 //
 // Synthetic rhythms: ECG generated from Gaussian PQRST model, HR is dynamic.
 // Recording rhythms: ECG from pre-processed real patient data, HR is inherent
@@ -98,9 +102,9 @@ export const USE_RECORDINGS = true;
 // pre-computed R-peak positions for beat-to-beat synchronization.
 export const RHYTHMS = {
   // --- Synthetic rhythms (HR is adjustable) ---
-  'Ritmo Sinusal':             { source: 'synthetic' },
-  'Taquicardia Sinusal':       { source: 'synthetic', hrMin: 100 },
-  'Bradicardia Sinusal':       { source: 'synthetic', hrMax: 50 },
+  'Ritmo Sinusal':             { source: 'synthetic', ecgKey: 'NSR' },
+  'Taquicardia Sinusal':       { source: 'synthetic', hrMin: 100, ecgKey: 'ST' },
+  'Bradicardia Sinusal':       { source: 'synthetic', hrMax: 50, ecgKey: 'SB' },
 
   // --- Pulseless rhythms (no cardiac output, need defibrillation) ---
   'Fibrilación Ventricular':   { source: 'recording', dataKey: 'VFIB', noPulse: true },
@@ -119,6 +123,15 @@ export const RHYTHMS = {
   'BRDHH':                     { source: 'recording', dataKey: 'RBBB' },
   'Extrasístole Ventricular':  { source: 'recording', dataKey: 'VPB' },
   'Wolff-Parkinson-White':     { source: 'recording', dataKey: 'WPW' },
+
+  // --- Electrocardiograph only ---
+  // Ventricular tachycardias are held back from the monitor until the clinical
+  // team decides how each should behave there (with a pulse, or as an arrest
+  // rhythm that needs the defibrillator).
+  'Taquicardia Ventricular Monomorfa': { source: 'recording', dataKey: 'VT', ecgOnly: true },
+  'Taquicardia Ventricular Polimorfa': { source: 'recording', dataKey: 'PVT', ecgOnly: true, noPulse: true },
+  // On the monitor, asystole is the cardiac arrest button, not a rhythm.
+  'Asistolia':                 { source: 'flat', ecgOnly: true },
 };
 
 /**

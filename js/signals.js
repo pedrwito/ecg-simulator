@@ -75,6 +75,35 @@ export function getRecording(dataKey, lead) {
 }
 
 /**
+ * Get every lead of one patient, for the electrocardiograph view.
+ *
+ * Unlike getRecording(), the patient is chosen by index rather than at random:
+ * all 12 leads on a page must come from the same heart, and the user steps
+ * through the available examples deliberately.
+ *
+ * Patients with the most distinct leads are preferred, so a rhythm that has
+ * both a true 12-lead recording and a single-lead one (copied into every slot)
+ * never offers the copy.
+ *
+ * @param {string} dataKey - Rhythm key in the JSON (e.g. 'LBBB')
+ * @param {number} [index=0] - Which of the eligible patients to return
+ * @returns {{ patientId: string, count: number, nLeads: number, leads: Object } | null}
+ */
+export function getRecordingSet(dataKey, index = 0) {
+  if (!_signalDataCache) return null;
+  const rhythmData = _signalDataCache.rhythms[dataKey];
+  if (!rhythmData) return null;
+
+  const patients = rhythmData.patients;
+  const ids = Object.keys(patients);
+  const nLeads = Math.max(...ids.map(id => patients[id].nLeads));
+  const eligible = ids.filter(id => patients[id].nLeads === nLeads);
+  const patientId = eligible[index % eligible.length];
+
+  return { patientId, count: eligible.length, nLeads, leads: patients[patientId].leads };
+}
+
+/**
  * Generate a PPG signal synchronized to given R-peak positions.
  *
  * Instead of generating PPG at a fixed rate (which would be out of sync with

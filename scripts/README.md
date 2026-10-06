@@ -18,9 +18,11 @@ to re-process or add new signals.
 
 - **What:** 45,000+ 12-lead ECGs at 500Hz, 10 seconds each, labeled with SNOMED-CT codes
 - **URL:** https://physionet.org/content/ecg-arrhythmia/1.0.0/
-- **Rhythms extracted:** AF (Atrial Flutter), LBBB, RBBB, 1AVB, 3AVB, VPB, WPW, SVT, AFIB (fast)
+- **Rhythms extracted:** AF (Atrial Flutter), LBBB, RBBB, SVT, normal sinus (NSR),
+  sinus tachycardia (ST), sinus bradycardia (SB)
 - **How to download:** Use `wfdb` library or download from PhysioNet website
-- **Used for:** All conduction abnormalities, flutter, fast AFib/SVT replacements
+- **Used for:** Flutter, bundle branch blocks, one SVT example, and the sinus rhythms
+  shown in the electrocardiograph view
 
 ### Source 3: Cardially ECG Dataset (VFib)
 
@@ -35,6 +37,32 @@ to re-process or add new signals.
 - **Note:** The txt files only contain the pre-shock VFib (9s). Post-shock recovery
   waveforms exist only as scanned PDFs (not digitized). The post-defibrillation
   animation in the simulator is synthetic.
+
+### Source 4: MIMIC-IV-ECG
+
+- **What:** ~800,000 12-lead ECGs at 500Hz, 10 seconds each, with the cardiograph's
+  machine report and measured intervals (`machine_measurements.csv`)
+- **URL:** https://physionet.org/content/mimic-iv-ecg/1.0/
+- **License:** Open Database License (ODbL) v1.0 — attribution required
+- **Used for:** fast AFib, SVT, 1st and 3rd degree AV block, LBBB, WPW, ventricular
+  premature beats, monomorphic VT. Candidates were shortlisted by report text plus
+  measured rate / PR / QRS, then each one was inspected visually.
+- **Note:** the labels are machine reads, not cardiologist-confirmed. Leads are
+  stored as I, II, III, aVR, aVF, aVL — reorder by name, not by position.
+
+### Source 5: PTB-XL
+
+- **URL:** https://physionet.org/content/ptb-xl/1.0.3/ (CC BY 4.0)
+- **Used for:** ventricular paced rhythm in 12 leads (records 08964, 16746)
+
+### Source 6: CPSC-Extra (PhysioNet/CinC Challenge 2021 training set)
+
+- **URL:** https://physionet.org/content/challenge-2021/1.0.3/ (CC BY 4.0)
+- **Used for:** 12-lead ventricular fibrillation (Q2497) and the polymorphic VT
+  example (Q1285). Q1285 is labelled VF at the source; it is shown as polymorphic VT
+  because of its waxing and waning amplitude, pending review by a cardiologist.
+
+Other sinus records (normal, tachycardia, bradycardia) come from Source 2.
 
 ### Synthetic signals (generated in the browser)
 
@@ -60,6 +88,12 @@ Converts raw signal data into the web app's `data/signals.json`.
 4. Normalize amplitude to [-1, 1]
 5. Detect R-peaks using Pan-Tompkins algorithm
 6. Save signal + R-peak indices as JSON
+
+Each lead also stores `mv` (the millivolts that were scaled to 1.0 in step 4) and
+each patient stores `nLeads` (how many of its 12 lead slots hold distinct
+signals). The monitor ignores both. The electrocardiograph view (`js/ecg.js`)
+needs `mv` to draw at a true 10 mm/mV, and `nLeads` to avoid presenting a
+single-lead recording as a 12-lead ECG.
 
 **Usage:**
 ```bash
@@ -93,6 +127,19 @@ python scripts/explore_physionet.py --preview JS00803 --all-leads
 python scripts/explore_physionet.py --extract JS00803 --label AF
 
 # Then rebuild:
+python scripts/preprocess_signals.py
+```
+
+### `import_record.py`
+
+Appends a 12-lead recording from any source to the raw CSVs. Use it for
+databases other than PhysioNet ECG-Arrhythmia, which `explore_physionet.py`
+cannot fetch. Takes a `.npy` array of shape `(12, n_samples)` in mV and
+resamples it to 500 Hz / 10 s.
+
+**Usage:**
+```bash
+python scripts/import_record.py rec.npy --label VT --patient I47 --fs 257
 python scripts/preprocess_signals.py
 ```
 

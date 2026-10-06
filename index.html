@@ -28,6 +28,13 @@
     <span class="btn-title">Modo Individual</span>
     <span class="btn-desc">Configura y usa el monitor sin conexión</span>
   </button>
+
+  <button class="landing-btn" id="btn-ecg">
+    <span class="btn-title">Electrocardiógrafo</span>
+    <span class="btn-desc">ECG de 12 derivaciones en papel milimetrado</span>
+  </button>
+
+  <a id="credits-link" href="creditos.html">Fuentes de los registros</a>
 </div>
 
 <!-- ==================== JOIN SESSION DIALOG ==================== -->
@@ -184,13 +191,97 @@
     </div>
   </div>
   <div id="toolbar">
-    <button id="btn-vest">Conectar Chaleco</button>
+    <button id="btn-vest" class="vest-btn">Conectar Chaleco</button>
     <span id="vest-status" class="vest-status vest-off">Sin chaleco</span>
     <button id="btn-silence">Silenciar Alarma</button>
     <button id="btn-mute">Mute</button>
     <button id="btn-arrest" style="display:none;">Paro Cardíaco</button>
     <button id="btn-defib" style="display:none;">Desfibrilar</button>
     <button id="btn-back">Volver</button>
+  </div>
+</div>
+
+<!-- ==================== ELECTROCARDIOGRAPH SCREEN ==================== -->
+<!-- Screen structure follows a clinical cardiograph: settings along the top,
+     a patient bar, live waveforms, and a toolbar with Map and ECG underneath.
+     Pressing ECG switches to the preview: the page as it would print. -->
+<div id="ecg-screen">
+  <div id="ecg-topbar">
+    <span class="ecg-exam">12 derivaciones estándar</span>
+    <label>Formato
+      <select id="ecg-format">
+        <option value="6x2">6×2</option>
+        <option value="12x1">12×1</option>
+        <option value="4x3">3×4</option>
+        <option value="1">Ritmo (una derivación)</option>
+      </select>
+    </label>
+    <label>Derivación <select id="ecg-lead"></select></label>
+    <label>Velocidad
+      <select id="ecg-speed">
+        <option value="25">25 mm/s</option>
+        <option value="50">50 mm/s</option>
+      </select>
+    </label>
+    <label>Ganancia
+      <select id="ecg-gain">
+        <option value="5">5 mm/mV</option>
+        <option value="10" selected>10 mm/mV</option>
+        <option value="20">20 mm/mV</option>
+        <option value="10/5">10/5 mm/mV</option>
+        <option value="20/10">20/10 mm/mV</option>
+      </select>
+    </label>
+    <label>Pantalla
+      <select id="ecg-style">
+        <option value="paper">Papel</option>
+        <option value="black">Negra</option>
+      </select>
+    </label>
+    <span class="ecg-spacer"></span>
+    <!-- Simulator controls: what the "patient" has. Not part of a real device. -->
+    <label class="ecg-sim">Ritmo <select id="ecg-rhythm"></select></label>
+    <label class="ecg-sim">Ejemplo <select id="ecg-example"></select></label>
+  </div>
+
+  <div id="ecg-patient">
+    <span>ID: <b>SIM-001</b></span>
+    <span>Nombre: <b>Paciente simulado</b></span>
+    <span class="ecg-spacer"></span>
+    <span class="ecg-hr">♥ <b id="ecg-hr">--</b></span>
+    <span id="ecg-clock"></span>
+  </div>
+
+  <div id="ecg-note"></div>
+
+  <div id="ecg-main">
+    <canvas id="ecg-paper"></canvas>
+    <div id="ecg-preview-actions">
+      <button id="btn-ecg-print">Imprimir</button>
+      <button id="btn-ecg-png">Guardar</button>
+      <span class="ecg-spacer"></span>
+      <button id="btn-ecg-close">Cerrar</button>
+    </div>
+    <div id="ecg-map">
+      <div class="ecg-map-title">Mapa de electrodos</div>
+      <div id="ecg-map-figure"></div>
+      <div id="ecg-map-caption"></div>
+    </div>
+  </div>
+
+  <div id="ecg-toolbar">
+    <button id="btn-ecg-map">Mapa</button>
+    <button id="btn-ecg-acquire">ECG</button>
+    <button id="btn-ecg-freeze">Congelar</button>
+    <span id="ecg-freeze-nav">
+      <button id="btn-ecg-older" title="Más atrás">◀</button>
+      <span id="ecg-freeze-pos"></span>
+      <button id="btn-ecg-newer" title="Más reciente">▶</button>
+    </span>
+    <span class="ecg-spacer"></span>
+    <button id="btn-ecg-vest" class="vest-btn">Conectar Chaleco</button>
+    <span id="ecg-vest-status" class="vest-status vest-off">Sin chaleco</span>
+    <button id="btn-ecg-back">Volver</button>
   </div>
 </div>
 

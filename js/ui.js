@@ -22,21 +22,22 @@ import { startMonitor, stopAndCleanup, activateArrest, deactivateArrest, trigger
 import { createSession, joinSession, closeSession, cleanupSession, professorApplyChanges, professorToggleArrest, professorDefibrillate } from './session.js';
 import { ensureAudio } from './audio.js';
 import { toggleVest } from './vest.js';
+import { initEcg, startEcg, stopEcg } from './ecg.js';
 
 /**
  * Show a screen by ID, hiding all others.
  * Non-monitor screens get centered flex layout applied inline (monitor screen
  * uses its own flex layout defined in CSS).
  *
- * @param {string} id - Screen element ID ('landing-screen', 'join-dialog', 'config-screen', 'monitor-screen')
+ * @param {string} id - Screen element ID ('landing-screen', 'join-dialog', 'config-screen', 'monitor-screen', 'ecg-screen')
  */
 export function showScreen(id) {
-  ['landing-screen', 'join-dialog', 'config-screen', 'monitor-screen'].forEach(s => {
+  ['landing-screen', 'join-dialog', 'config-screen', 'monitor-screen', 'ecg-screen'].forEach(s => {
     document.getElementById(s).style.display = 'none';
   });
   const el = document.getElementById(id);
   el.style.display = 'flex';
-  if (id !== 'monitor-screen') {
+  if (id !== 'monitor-screen' && id !== 'ecg-screen') {
     el.style.flexDirection = 'column';
     el.style.alignItems = 'center';
     el.style.justifyContent = 'center';
@@ -149,6 +150,17 @@ export function initEventListeners() {
   });
   document.getElementById('btn-individual').addEventListener('click', () => {
     showScreen('config-screen');
+  });
+
+  // --- Electrocardiograph ---
+  initEcg();
+  document.getElementById('btn-ecg').addEventListener('click', () => {
+    showScreen('ecg-screen');
+    startEcg();
+  });
+  document.getElementById('btn-ecg-back').addEventListener('click', () => {
+    stopEcg();
+    showScreen('landing-screen');
   });
 
   // --- Join dialog ---

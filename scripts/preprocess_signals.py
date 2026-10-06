@@ -10,8 +10,8 @@ Pipeline per signal:
   2. Bandpass filter 0.5–50Hz (removes DC offset and high-frequency noise)
   3. Downsample 500Hz → 150Hz (matches the web app's virtual sample rate)
   4. Normalize amplitude to [-1, 1] range (consistent display scaling)
-  5. Detect R-peaks using Pan-Tompkins algorithm
-  6. Convert R-peak indices to 150Hz sample positions
+  5. Trim to a seamless loop (same cut for every lead of a patient)
+  6. Detect R-peaks using Pan-Tompkins algorithm on the trimmed signal
 
 Output format (data/signals.json):
   {
@@ -21,9 +21,14 @@ Output format (data/signals.json):
         "patients": {
           "5": {
             "leads": {
+            "nLeads": 12,                        // distinct lead signals (1 = one
+                                                 // lead copied into all 12 slots)
+            "leads": {
               "II": {
                 "signal": [0.01, -0.03, ...],   // float array, 3 decimal places
-                "rPeaks": [45, 168, 293, ...]    // sample indices at 150Hz
+                "rPeaks": [45, 168, 293, ...],   // sample indices at 150Hz
+                "mv": 1.234                      // mV at signal == 1.0 (omitted if
+                                                 // the source was pre-normalized)
               },
               "V1": { ... }
             }
@@ -32,6 +37,15 @@ Output format (data/signals.json):
       }
     }
   }
+
+Signals are a little under 10 s and differ in length between patients: the
+web app plays them on repeat, and step 5 trims each one so that its end runs
+into its start between two beats instead of jumping mid-complex.
+
+The monitor only needs the normalized signal. The electrocardiograph view
+(js/ecg.js) draws on millimetre paper at 10 mm/mV, so it also needs `mv` to
+restore each lead's true amplitude, and `nLeads` to know whether a 12-lead
+layout would be honest.
 
 Usage:
   # From the project root:
@@ -55,6 +69,7 @@ import sys
 
 import numpy as np
 import scipy.signal
+from scipy.spatial.distance import cdist
 
 # ─── Signal processing functions ────────────────────────────────────────────
 # These replicate the pipeline from the original utils.py, used by the PyQt5
@@ -182,7 +197,9 @@ def process_signal(raw_signal):
     """
     Full preprocessing pipeline for one signal.
 
-    Returns (processed_signal, r_peak_indices) both at OUTPUT_FS (150Hz).
+    Returns (processed_signal, peak) — the signal at OUTPUT_FS (150Hz) and the
+    amplitude (in source units) that was scaled to 1.0 by the normalization
+    step. R-peaks are detected later, once the loop has been trimmed.
     """
     signal = np.array(raw_signal, dtype=float)
 
@@ -194,13 +211,114 @@ def process_signal(raw_signal):
     # Step 3: Downsample to web app sample rate
     signal = downsample(signal, INPUT_FS, OUTPUT_FS)
 
-    # Step 4: Normalize to [-1, 1]
+    # Step 4: Normalize to [-1, 1], remembering the scale that was divided out
+    peak = float(max(abs(np.max(signal)), abs(np.min(signal))))
     signal = normalize(signal)
 
-    # Step 5: Detect R-peaks on the processed 150Hz signal
-    r_peaks = detect_r_peaks(signal, OUTPUT_FS)
+    return signal, peak
 
-    return signal, r_peaks
+
+# ─── Seamless looping ───────────────────────────────────────────────────────
+# The web app repeats each recording for as long as the rhythm is on screen.
+# Played as-is, the last sample is followed by the first, which lands anywhere
+# in the cardiac cycle: a visible jump, and often a beat that arrives too early
+# or too late — an arrhythmia that is not in the recording. Trimming the
+# recording to a well-chosen [start, end) removes both.
+
+LOOP_MATCH = round(0.10 * OUTPUT_FS)   # samples compared each side of a cut point
+LOOP_FADE = round(0.10 * OUTPUT_FS)    # crossfade that absorbs the last mismatch
+LOOP_TOLERANCE = 0.12                  # mismatch the crossfade hides, as a fraction of the
+                                       # signal's own RMS around the cut (floor: 0.03 of full scale)
+
+
+def beat_positions(leads, fs):
+    """
+    QRS positions common to all leads of one patient.
+
+    Uses the slope energy summed across leads rather than a single lead, so a
+    lead where the QRS happens to be small cannot hide a beat.
+    """
+    energy = np.abs(np.gradient(leads, axis=1)).sum(axis=0)
+    window = round(0.06 * fs)
+    energy = np.convolve(energy, np.ones(window) / window, 'same')
+    peaks, _ = scipy.signal.find_peaks(
+        energy, height=0.35 * np.percentile(energy, 99), distance=round(0.25 * fs)
+    )
+    return peaks
+
+
+def find_loop(leads, fs):
+    """
+    Choose [start, end) so that the recording loops without a visible seam.
+
+    Two conditions, in order:
+      1. The beat-to-beat interval across the seam must look like the others.
+         For a regular rhythm that means within 3% of the median R-R; for an
+         irregular one (AFib, ectopy, VFib), within the range the recording
+         already shows. This is what stops the loop from inventing a pause or
+         a premature beat.
+      2. The waveform around `end` must match the waveform around `start` in
+         every lead, so the join is smooth.
+    Any cut that matches to within LOOP_TOLERANCE is as good as invisible once
+    crossfaded, so among those the longest loop wins: the best-matching pair
+    of points is often only a few seconds apart, and throwing away half of a
+    10 s recording to shave an imperceptible mismatch is a bad trade.
+
+    @param leads: array (n_leads, n_samples), all leads of one patient
+    @returns (start, end) sample indices
+    """
+    n = leads.shape[1]
+    starts = np.arange(LOOP_MATCH + LOOP_FADE, int(n * 0.3))
+    ends = np.arange(int(n * 0.7), n - LOOP_MATCH)
+
+    def windows(points):
+        # Shape only: each lead's local mean is removed, so slow baseline drift
+        # between the start and the end of the recording does not rule out an
+        # otherwise perfect cut. The crossfade turns that offset into a gentle
+        # ramp instead of a step.
+        out = []
+        for p in points:
+            w = leads[:, p - LOOP_MATCH:p + LOOP_MATCH]
+            out.append((w - w.mean(axis=1, keepdims=True)).ravel())
+        return np.array(out)
+
+    cost = cdist(windows(starts), windows(ends), 'sqeuclidean')
+
+    beats = beat_positions(leads, fs)
+    if len(beats) >= 4:
+        rr = np.diff(beats)
+        if rr.std() / rr.mean() < 0.06:
+            low, high = np.median(rr) * 0.97, np.median(rr) * 1.03
+        else:
+            low, high = np.percentile(rr, 10), np.percentile(rr, 90)
+
+        # R-R across the seam = (end → previous beat) + (start → next beat)
+        after_start = np.array([beats[beats > p][0] - p if (beats > p).any() else np.nan for p in starts])
+        before_end = np.array([p - beats[beats < p][-1] if (beats < p).any() else np.nan for p in ends])
+        seam_rr = after_start[:, None] + before_end[None, :]
+        allowed = (seam_rr >= low) & (seam_rr <= high)
+        if allowed.any():
+            cost = np.where(allowed, cost, np.inf)
+
+    # Tolerance scales with how busy the signal is: a mismatch that would show
+    # on a quiet baseline is lost in the swings of VT or VFib.
+    rms = np.sqrt(cost / (leads.shape[0] * 2 * LOOP_MATCH))
+    busy = np.median(np.sqrt((windows(ends) ** 2).mean(axis=1)))
+    good = np.argwhere(rms <= max(0.03, LOOP_TOLERANCE * busy, rms.min() * 1.2))
+    i, j = max(good, key=lambda ij: ends[ij[1]] - starts[ij[0]])
+    return int(starts[i]), int(ends[j])
+
+
+def make_loop(leads, start, end):
+    """
+    Cut [start, end) and crossfade its tail into the samples that precede
+    `start`, so the last sample leads straight into the first.
+    """
+    loop = leads[:, start:end].copy()
+    for i in range(LOOP_FADE):
+        t = (i + 1) / (LOOP_FADE + 1)
+        loop[:, -LOOP_FADE + i] = (1 - t) * leads[:, end - LOOP_FADE + i] + t * leads[:, start - LOOP_FADE + i]
+    return loop
 
 
 def load_raw_data(signals_path, labels_path):
@@ -232,33 +350,54 @@ def build_output(signals, labels):
         "rhythms": {}
     }
 
+    # Per-patient facts that need every lead before they can be decided.
+    #   distinct:      single-lead sources (Cardially VFib, the original
+    #                  dataset) were stored with one signal copied into all 12
+    #                  lead slots. Counting distinct rows exposes that.
+    #   prenormalized: the original dataset's rows all peak at exactly 1.0, so
+    #                  their millivolt scale is gone. Checked per patient, not
+    #                  per lead: PhysioNet values are quantized to 0.001 mV, so
+    #                  a single calibrated lead can peak at exactly 1.0 by chance.
+    distinct = {}
+    prenormalized = {}
+    for raw_signal, label in zip(signals, labels):
+        key = (label[0], label[1])
+        distinct.setdefault(key, set()).add(tuple(raw_signal))
+        peaks_at_one = abs(max(abs(v) for v in raw_signal) - 1.0) < 1e-6
+        prenormalized[key] = prenormalized.get(key, True) and peaks_at_one
+
+    # Pass 1: filter, downsample and normalize every lead.
+    patients = {}   # (rhythm, patient) -> { lead: (signal, peak) }
     total = len(signals)
     for i, (raw_signal, label) in enumerate(zip(signals, labels)):
         rhythm = label[0]       # e.g. "SR", "AFIB", "PACE", "SVTAC"
         patient = label[1]      # e.g. "5", "7", "15"
         lead = label[2]         # e.g. "I", "II", "V1"
+        print(f"  [{i + 1}/{total}] {rhythm} patient {patient} lead {lead}")
+        patients.setdefault((rhythm, patient), {})[lead] = process_signal(raw_signal)
 
-        print(f"  [{i + 1}/{total}] {rhythm} patient {patient} lead {lead}...", end=" ")
+    # Pass 2: one loop cut per patient. It has to be the same for every lead —
+    # the 12 leads are simultaneous views of the same heartbeats.
+    for (rhythm, patient), leads in patients.items():
+        names = list(leads)
+        stack = np.array([leads[name][0] for name in names])
+        start, end = find_loop(stack, OUTPUT_FS)
+        looped = make_loop(stack, start, end)
+        print(f"  {rhythm} patient {patient}: loop {start}–{end} "
+              f"({(end - start) / OUTPUT_FS:.2f} s of {stack.shape[1] / OUTPUT_FS:.0f} s)")
 
-        # Process
-        processed, r_peaks = process_signal(raw_signal)
+        entry = {"nLeads": len(distinct[(rhythm, patient)]), "leads": {}}
+        for name, signal in zip(names, looped):
+            lead_entry = {
+                # Round to 3 decimal places to reduce JSON size
+                "signal": [round(float(v), 3) for v in signal],
+                "rPeaks": [int(p) for p in detect_r_peaks(signal, OUTPUT_FS)],
+            }
+            if not prenormalized[(rhythm, patient)]:
+                lead_entry["mv"] = round(leads[name][1], 4)
+            entry["leads"][name] = lead_entry
 
-        # Round to 3 decimal places to reduce JSON size
-        signal_list = [round(float(v), 3) for v in processed]
-        r_peaks_list = [int(p) for p in r_peaks]
-
-        print(f"{len(signal_list)} samples, {len(r_peaks_list)} R-peaks")
-
-        # Build nested structure
-        if rhythm not in output["rhythms"]:
-            output["rhythms"][rhythm] = {"patients": {}}
-        if patient not in output["rhythms"][rhythm]["patients"]:
-            output["rhythms"][rhythm]["patients"][patient] = {"leads": {}}
-
-        output["rhythms"][rhythm]["patients"][patient]["leads"][lead] = {
-            "signal": signal_list,
-            "rPeaks": r_peaks_list,
-        }
+        output["rhythms"].setdefault(rhythm, {"patients": {}})["patients"][patient] = entry
 
     return output
 

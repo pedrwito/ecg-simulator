@@ -245,11 +245,10 @@ export function missingElectrodes() {
 
 /** Update the toolbar button, the status pill, and the LEAD OFF banner detail. */
 function refreshVestUI() {
-  const btn    = document.getElementById('btn-vest');
-  const pill   = document.getElementById('vest-status');
   const detail = document.getElementById('vest-banner-detail');
 
-  if (btn) {
+  // The monitor and the electrocardiograph each have their own button + pill.
+  for (const btn of document.querySelectorAll('.vest-btn')) {
     btn.textContent = state.vestPort ? 'Desconectar Chaleco' : 'Conectar Chaleco';
     btn.classList.toggle('active', !!state.vestPort);
   }
@@ -275,7 +274,7 @@ function refreshVestUI() {
     detailText = '';
   }
 
-  if (pill) {
+  for (const pill of document.querySelectorAll('.vest-status')) {
     pill.className = 'vest-status ' + cls;
     pill.textContent = text;
   }
@@ -296,12 +295,10 @@ function refreshVestUI() {
 export function initVest() {
   state.vestSupported = isVestSupported();
 
-  const btn  = document.getElementById('btn-vest');
-  const pill = document.getElementById('vest-status');
-
   if (!state.vestSupported) {
-    if (btn) btn.style.display = 'none';
-    if (pill) pill.style.display = 'none';
+    for (const el of document.querySelectorAll('.vest-btn, .vest-status')) {
+      el.style.display = 'none';
+    }
     return;
   }
 
